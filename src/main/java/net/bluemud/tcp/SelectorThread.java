@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.*;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Map;
@@ -19,7 +20,12 @@ class SelectorThread extends Thread implements Closeable {
     /**
      * The selector.
      */
-    private Selector selector;
+    private final Selector selector;
+
+	/**
+	 * Connection factory
+	 */
+	private final TcpFactory factory;
 
     /**
      * The run flag.
@@ -35,8 +41,8 @@ class SelectorThread extends Thread implements Closeable {
     /**
      * Client socket channels waiting to register with the selector.
      */
-    private ConcurrentLinkedQueue<InetSocketAddress> clientRegistrations =
-            new ConcurrentLinkedQueue<InetSocketAddress>();
+    private ConcurrentLinkedQueue<Pair<InetSocketAddress, OutboundConnectionListener>> clientRegistrations =
+            new ConcurrentLinkedQueue<Pair<InetSocketAddress, OutboundConnectionListener>>();
 
     /**
      * Connection legs with pending writes.
@@ -44,17 +50,23 @@ class SelectorThread extends Thread implements Closeable {
     private ConcurrentLinkedQueue<ConnectionLeg> pendingWrites =
             new ConcurrentLinkedQueue<ConnectionLeg>();
 
+	/**
+	 * Connection legs ready to read.
+	 */
+	private ConcurrentLinkedQueue<ConnectionLeg> readReady =
+			new ConcurrentLinkedQueue<ConnectionLeg>();
 
     /**
      * Constructor.
      *
      * @throws java.io.IOException if an error occurs opening the selector
      */
-    SelectorThread() throws IOException {
+    SelectorThread(TcpFactory factory) throws IOException {
         super("TCP-Selector");
 
         // Open selector.
-        selector = Selector.open();
+        this.selector = Selector.open();
+		this.factory = factory;
         start();
     }
 
@@ -114,7 +126,7 @@ class SelectorThread extends Thread implements Closeable {
                         if (!lkey.isValid()) {
                             ConnectionLeg leg  = (ConnectionLeg)lkey.attachment();
                             if (leg != null) {
-                                leg.close();
+                                leg.close(null);
                             }
                         }
                     }
@@ -130,11 +142,11 @@ class SelectorThread extends Thread implements Closeable {
                 }
 
                 // Start any pending client connections.
-                InetSocketAddress laddr = clientRegistrations.poll();
+                Pair<InetSocketAddress, OutboundConnectionListener> laddr = clientRegistrations.poll();
 
                 while (laddr != null) {
                     // Open a socket channel to the specified address and initiate the connection.
-                    createOutboundLeg(laddr);
+                    createOutboundLeg(laddr.getKey(), laddr.getValue());
 
                     // Get the next pending connection.
                     laddr = clientRegistrations.poll();
@@ -147,7 +159,13 @@ class SelectorThread extends Thread implements Closeable {
                     pendingWrite = pendingWrites.poll();
                 }
 
-            }
+				// Process any read ready legs
+				ConnectionLeg reader = readReady.poll();
+				while (reader != null) {
+					reader.enableRead();
+					reader = readReady.poll();
+				}
+			}
             catch (ConcurrentModificationException cmex) {
                 // The selected key set has been modified by a separate thread.
                 LOG.error("selector key error", cmex);
@@ -205,6 +223,21 @@ class SelectorThread extends Thread implements Closeable {
         return(lchannel);
     }
 
+	void startClientConnection(InetSocketAddress socketAddress, OutboundConnectionListener listener) {
+		clientRegistrations.add(Pair.of(socketAddress, listener));
+		selector.wakeup();
+	}
+
+	void addPendingWrite(ConnectionLeg leg) {
+		pendingWrites.offer(leg);
+		selector.wakeup();
+	}
+
+	void addReadReady(ConnectionLeg leg) {
+		readReady.offer(leg);
+		selector.wakeup();
+	}
+
     private void processInboundConnection(SelectionKey key) {
 
         // Get channel with connection request
@@ -223,20 +256,21 @@ class SelectorThread extends Thread implements Closeable {
             // Register the received channel with the selector.
             SelectionKey lkey = lchannel.register(selector, SelectionKey.OP_READ);
 
-            // TODO call out to create new leg or close.
-
             // Set up a new connection leg instance object.
-//            ConnectionLeg inbound = new ConnectionLeg(lchannel, lkey);
-//            lkey.attach(inbound);
-
-            // TODO notify new inbound leg
+            ConnectionLeg inbound = factory.createLegForInboundConnection(lchannel, lkey);
+			if (inbound != null) {
+				lkey.attach(inbound);
+			} else {
+				// Rejected
+				lchannel.close();
+			}
         }
         catch (IOException iox) {
             LOG.error("Error processing inbound connection ", iox);
         }
     }
 
-    private ConnectionLeg createOutboundLeg(InetSocketAddress addr) throws IOException {
+    ConnectionLeg createOutboundLeg(InetSocketAddress addr, OutboundConnectionListener listener) throws IOException {
         // Open a socket channel to the specified address and initiate the connection.
         SocketChannel lchannel = SocketChannel.open();
         lchannel.configureBlocking(false);
@@ -245,13 +279,16 @@ class SelectorThread extends Thread implements Closeable {
         SelectionKey key = lchannel.register(selector, SelectionKey.OP_CONNECT);
 
         // Create the new connection leg
-        ConnectionLeg outbound = new ConnectionLeg(lchannel, key);
+        ConnectionLeg outbound = new ConnectionLeg(lchannel, key, this);
 
-        // Attach the leg to the key
-        key.attach(outbound);
+		// Attach the leg to the key
+		key.attach(outbound);
 
-        // Initiate the connection.
-        lchannel.connect(addr);
+		// Initiate the connection.
+		lchannel.connect(addr);
+
+		// Notify.
+		listener.connected(addr, outbound);
 
         return outbound;
     }
@@ -270,12 +307,15 @@ class SelectorThread extends Thread implements Closeable {
             }
 
             key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+
+			// Process any writes pending on the connection
+			((ConnectionLeg)key.attachment()).write();
         }
         catch (Exception iox) {
             LOG.error("Outbound connection completion error ", iox);
 
             // Close the pending connection object
-            ((ConnectionLeg)key.attachment()).close();
+            ((ConnectionLeg)key.attachment()).close(iox);
 
             // Unregister the channel from the selector
             key.cancel();
@@ -285,20 +325,12 @@ class SelectorThread extends Thread implements Closeable {
     private void processRead(SelectionKey key) throws InterruptedException {
         // Get the connection object associated with the key.
         ConnectionLeg lconn = (ConnectionLeg)key.attachment();
-
-        try {
-            // Call into the connection to read data.
-            lconn.read();
-        }
-        catch (Exception iox) {
-            LOG.error("read error ", iox);
-        }
+		lconn.read();
     }
 
     private void processWrite(SelectionKey key) throws InterruptedException {
         // Get the connection object associated with the key.
         ConnectionLeg lconn = (ConnectionLeg)key.attachment();
-
-        // TODO write pending data.
+		lconn.write();
     }
 }
