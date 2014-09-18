@@ -14,7 +14,7 @@ public interface ConnectionReader {
      * This method must not block.
      *
      * @return a {@code ByteBuffer} ready to receive the data, if {@code null} or a buffer with no capacity is returned
-     *   there will be no further calls to read data, until the connection is notified by a call to TODO
+     *   there will be no further calls to read data, until the connection is notified by a call to {@link Connection#readBufferAvailable()}.
      */
     ByteBuffer getReadBuffer();
 

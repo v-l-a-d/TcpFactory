@@ -98,8 +98,7 @@ class ConnectionLeg implements Connection {
                         close(null);
                     }
 
-                    // Flip the buffer and return it
-                    buffer.flip();
+					// Return the buffer.
                     processor.readComplete(buffer);
                 }
                 catch (IOException iox) {

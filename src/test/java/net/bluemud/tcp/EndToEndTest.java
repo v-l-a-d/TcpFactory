@@ -9,9 +9,11 @@ import org.junit.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.sql.Time;
 import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -58,9 +60,6 @@ public class EndToEndTest {
 		inboundConnection.close();
 		clientFactory.shutdown();
 		serverFactory.shutdown();
-
-        // TODO notification of shutdown complete
-        Thread.sleep(200);
 	}
 
 	@Test
@@ -97,11 +96,24 @@ public class EndToEndTest {
 		// Simulate lack of read buffers on the server side.
 		inboundProcessor.reading = false;
 
-		// Write some buffers on the client side.
-		for (int ii = 0; ii < 50; ii++) {
+		// Write some buffers on the client side - until write buffers are no longer returned.
+		for (int ii = 0; ii < 10; ii++) {
 			byte[] data = new byte[5*1024];
 			Arrays.fill(data, (byte)ii);
-			clientConnection.write(ByteBuffer.wrap(data));
+
+			ByteBuffer buffer = ByteBuffer.wrap(data);
+			buffer.flip();
+			clientProcessor.writeBuffers.add(buffer);
+		}
+
+		ByteBuffer buffer = clientProcessor.writeBuffers.poll(1, TimeUnit.SECONDS);
+		int bytesWritten = 0;
+
+		while (buffer != null) {
+			buffer.position(0).limit(5*1024);
+			clientConnection.write(buffer);
+			bytesWritten += buffer.capacity();
+			buffer = clientProcessor.writeBuffers.poll(1, TimeUnit.SECONDS);
 		}
 
 		// 50K sent to the server - it has not read any data
@@ -121,14 +133,15 @@ public class EndToEndTest {
 			if (recv != null) {
 				bytesRead += recv.remaining();
 			}
-		} while ((recv != null) && (bytesRead < (5 * 50 * 1024)));
-		assertThat(bytesRead, is(5 * 50 * 1024));
-		assertThat(clientProcessor.writeBuffersReturned, is(50));
+		} while ((recv != null) && (bytesRead < bytesWritten));
+		assertThat(bytesRead, is(bytesWritten));
 	}
 
 	class TestConnectionProcessor implements ConnectionProcessor {
 
-		BlockingQueue<ByteBuffer> recvQueue = new LinkedBlockingDeque<ByteBuffer>();
+		BlockingQueue<ByteBuffer> recvQueue = new LinkedBlockingQueue<ByteBuffer>();
+		BlockingQueue<ByteBuffer> writeBuffers = new LinkedBlockingQueue<ByteBuffer>();
+
 		volatile boolean closed = false;
 		volatile boolean reading = true;
 		int writeBuffersReturned = 0;
@@ -155,7 +168,7 @@ public class EndToEndTest {
 
 		@Override public void writeComplete(ByteBuffer buffer) {
 			writeBuffersReturned++;
-			System.out.println("Write buffer returned");
+			writeBuffers.add(buffer);
 		}
 	}
 }
