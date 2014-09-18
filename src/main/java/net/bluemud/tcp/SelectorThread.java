@@ -183,6 +183,14 @@ class SelectorThread extends Thread implements Closeable {
 
         // Thread exiting, close the selector.
         try {
+            for (SelectionKey key : selector.keys()) {
+                try {
+                    key.channel().close();
+                } catch (Exception ex) {
+                    LOG.warn("Error closing channel", ex);
+                }
+            }
+
             selector.close();
         }
         catch (IOException iox) {

@@ -58,6 +58,9 @@ public class EndToEndTest {
 		inboundConnection.close();
 		clientFactory.shutdown();
 		serverFactory.shutdown();
+
+        // TODO notification of shutdown complete
+        Thread.sleep(200);
 	}
 
 	@Test
