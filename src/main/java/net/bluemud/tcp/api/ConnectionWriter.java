@@ -9,7 +9,7 @@ public interface ConnectionWriter {
 
     /**
      * Called on completion of a write.
-     * @param buffer the buffer that was written (now available for re-use)
+     * @param buffer the buffer that was readComplete (now available for re-use)
      */
     void writeComplete(ByteBuffer buffer);
 }

@@ -1,14 +1,13 @@
 package net.bluemud.tcp.util;
 
-import junit.framework.TestCase;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertThat;
 
 public class RingByteBufferTest {
@@ -17,47 +16,72 @@ public class RingByteBufferTest {
 	public void remaining() throws Exception {
 		RingByteBuffer ring = new RingByteBuffer(10);
 		assertThat(ring.remaining(), is(10));
+		assertThat(ring.available(), is(0));
 
-		ByteBuffer buffer = ring.allocate(5);
-		assertThat(ring.remaining(), is(5));
+
+		ByteBuffer buffer = ring.getEmptyBuffer(); // T=0, DT=0, H=0
+		assertThat(ring.remaining(), is(0));
 		assertThat(buffer.position(), is(0));
-		assertThat(buffer.limit(), is(5));
+		assertThat(buffer.limit(), is(10));
 		assertThat(buffer.capacity(), is(10));
 		assertThat(ring.available(), is(0));
 
-		ByteBuffer buffer2 = ring.allocate(3);
-		assertThat(ring.remaining(), is(2));
-		assertThat(buffer2.position(), is(5));
-		assertThat(buffer2.limit(), is(8));
+		ByteBuffer buffer2 = ring.getEmptyBuffer(); // T=0, DT=0, H=0
+		assertThat(buffer2.remaining(), is(0));
+		assertThat(ring.remaining(), is(0));
 		assertThat(buffer2.capacity(), is(10));
 		assertThat(ring.available(), is(0));
 
 		buffer.put(new byte[5]);
-		ring.filled(buffer);
-		assertThat(ring.remaining(), is(2));
+		ring.readComplete(buffer);                  // T=0, DT=5, H=5
+		assertThat(ring.remaining(), is(5));
 		assertThat(ring.available(), is(5));
 
 		InputStream instr = ring.getInputStream();
-		instr.read();
-		assertThat(ring.remaining(), is(3));
+		instr.read();                        // T=1, DT=5, H=5
+		assertThat(ring.remaining(), is(6));
 		assertThat(ring.available(), is(4));
-		instr.read(new byte[4]);
-		assertThat(ring.remaining(), is(7));
+		instr.read(new byte[4]);             // T=5, DT=5, H=5
+		assertThat(ring.remaining(), is(10));
 		assertThat(ring.available(), is(0));
 
+		buffer2 = ring.getEmptyBuffer();
 		buffer2.put(new byte[3]);
-		ring.filled(buffer2);
+		ring.readComplete(buffer2);               // T=5, DT=8, H=8
 		assertThat(ring.remaining(), is(7));
 		assertThat(ring.available(), is(3));
 
-		ByteBuffer buffer3 = ring.allocate(7);
+		ByteBuffer buffer3 = ring.getEmptyBuffer(); // T=5, DT=8, H=0
 		assertThat(buffer3.remaining(), is(2)); // end of the underlying array
+		assertThat(ring.remaining(), is(0));
+		assertThat(ring.available(), is(3));    // overrun case
+
+		buffer3.put(new byte[2]);
+		ring.readComplete(buffer3);              // T=5, DT=0, H=0
+		assertThat(ring.available(), is(5));
 		assertThat(ring.remaining(), is(5));
-		assertThat(ring.available(), is(3));
+
+		instr.read(new byte[5]);           // T=0, DT=0, H=0
+		assertThat(ring.available(), is(0));
+		assertThat(ring.remaining(), is(10));
+	}
+
+	@Test
+	public void lapping() throws Exception {
+		RingByteBuffer ring = new RingByteBuffer(10);
+		ByteBuffer buffer1 = ring.getEmptyBuffer();
+		buffer1.put(new byte[10]);
+		ring.readComplete(buffer1);
+
+		assertThat(ring.available(), is(10));
+		assertThat(ring.remaining(), is(0));
+		assertThat(ring.getEmptyBuffer().remaining(), is(0));
 	}
 
     @Test
     public void threaded() throws Exception {
+
+		final int data_size = 2048 + (int)(Math.random() * (12*1024));
         final RingByteBuffer ring = new RingByteBuffer(512);
         final AtomicInteger received = new AtomicInteger(0);
 
@@ -66,19 +90,10 @@ public class RingByteBufferTest {
             public void run() {
                 InputStream inStr = ring.getInputStream();
                 int bytesRead = 0;
-                byte[] buff = new byte[128];
                 try {
-//                    int read = inStr.read(buff);
-//                    byte val = buff[read -1];
                     int val = inStr.read();
                     while (val != 23) {
-                        bytesRead ++;
-
-//                        if (bytesRead >= 2048) {
-//                            break;
-//                        }
-//                        read = inStr.read(buff);
-//                        val = buff[read -1];
+                        bytesRead++;
                         val = inStr.read();
                     }
                 } catch (Exception e) {
@@ -93,34 +108,37 @@ public class RingByteBufferTest {
 
         // Loop writing bytes to the ring buffer ByteBuffers
         int bytesWritten = 0;
-        while (bytesWritten < 2048) {
-            int writeAmount = Math.max(1, Math.min((int)(Math.random() * 256), 2048 - bytesWritten));
-            ByteBuffer buffer = ring.allocate(writeAmount);
+        while (bytesWritten < data_size) {
+            ByteBuffer buffer = ring.getEmptyBuffer();
 
-            if (buffer != null) {
-                System.out.println("position: " + buffer.position() + " limit: " + buffer.limit() + " remaining: " + buffer.remaining());
-                bytesWritten += buffer.remaining();
+            if (buffer.remaining() > 0) {
+				int writeAmount = Math.max(1, Math.min((int)(Math.random() * 256), data_size - bytesWritten));
+				writeAmount = Math.min(writeAmount, buffer.remaining());
+                bytesWritten += writeAmount;
 
                 // Fill the buffer
-                buffer.put(new byte[buffer.remaining()]);
+                buffer.put(new byte[writeAmount]);
 
                 // Pass it back.
-                ring.filled(buffer);
+                ring.readComplete(buffer);
             } else {
-                // No capacity - wait
-                System.out.println("No write buffer");
-                Thread.sleep(250);
+                // No capacity - pause
+                Thread.sleep(10);
             }
         }
 
-        System.out.println("Bytes written " + bytesWritten);
+        assertThat(bytesWritten, is(data_size));
 
         // Write the poison pill.
-        ByteBuffer buffer = ring.allocate(1);
+        ByteBuffer buffer = ring.getEmptyBuffer();
+		while (!buffer.hasRemaining()) {
+			Thread.sleep(50);
+			buffer = ring.getEmptyBuffer();
+		}
         buffer.put((byte)23);
-        ring.filled(buffer);
+        ring.readComplete(buffer);
 
         reader.join(1000);
-        assertThat(received.get(), is(2048));
+        assertThat(received.get(), is(data_size));
     }
 }

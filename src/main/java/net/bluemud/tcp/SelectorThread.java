@@ -1,5 +1,6 @@
 package net.bluemud.tcp;
 
+import net.bluemud.tcp.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,10 +9,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.*;
-import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 class SelectorThread extends Thread implements Closeable {
@@ -117,7 +116,7 @@ class SelectorThread extends Thread implements Closeable {
                             processRead(lkey);
                         }
 
-                        // Check whether data can be written again.
+                        // Check whether data can be readComplete again.
                         if (lkey.isValid() && lkey.isWritable()) {
                             processWrite(lkey);
                         }

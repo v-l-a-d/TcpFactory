@@ -78,8 +78,6 @@ class ConnectionLeg implements Connection {
 
     /**
      * Read from the channel
-     * @return {@code true} if all the read data is written
-     * @throws java.io.IOException
      */
     void read() {
         if (processor != null && this.channel.isConnected()) {
@@ -110,7 +108,7 @@ class ConnectionLeg implements Connection {
 
     /**
      * Write pending data to the socket channel
-     * @return {@code true} if all data in the buffer is written, otherwise {@code false}
+     * @return {@code true} if all data in the buffer is readComplete, otherwise {@code false}
      */
     boolean write() {
         if (!channel.isConnected()) {
@@ -130,7 +128,7 @@ class ConnectionLeg implements Connection {
 					this.key.interestOps(this.key.interestOps() | SelectionKey.OP_WRITE);
 					return false;
 				} else {
-					// Remove written buffer from queue
+					// Remove readComplete buffer from queue
 					writeQueue.poll();
 
 					if (processor != null) {

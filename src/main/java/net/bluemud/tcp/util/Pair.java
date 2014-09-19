@@ -1,4 +1,4 @@
-package net.bluemud.tcp;
+package net.bluemud.tcp.util;
 
 /**
  */
