@@ -20,6 +20,7 @@ public class RingByteBuffer {
 	private volatile int head = 0; // Write cursor
 	private volatile int data_head = 0; // Data head cursor
 	private volatile int tail = 0; // Read cursor
+    private boolean headToTail = false;
 
 	// Lock and condition used to signal data availability
 	private final ReentrantLock notificationLock;
@@ -44,22 +45,21 @@ public class RingByteBuffer {
 	 * @return a {@code ByteBuffer} with capacity up to the specified size.
 	 */
 	public ByteBuffer allocate(int size) {
-		if (size > remaining()) {
-			// insufficient capacity
-			throw new IllegalArgumentException("Insufficient capacity");
-		}
-
 		// Move the head ahead
-		int oldHead = head;
-		if (head + size > array.length) {
+        int pre_tail = tail == 0 ? array.length - 1 : tail - 1;
+
+        int limit = (head >= tail) ? array.length  : pre_tail;
+
+ 		int oldHead = head;
+		if (head + size >= limit) {
 			// Will wrap - just return the remaining portion of the array - caller will have to make another
 			// call to allocate another buffer.
-			head = 0;
-			return ByteBuffer.wrap(array, oldHead, (array.length - oldHead));
+			head = limit % array.length;
+			return ByteBuffer.wrap(array, oldHead, (limit - oldHead));
 		} else {
 			// Return the reserved portion of the array as a ByteBuffer
 			head = oldHead + size;
-			return ByteBuffer.wrap(array, oldHead, size);
+            return ByteBuffer.wrap(array, oldHead, size);
 		}
 	}
 
@@ -128,7 +128,15 @@ public class RingByteBuffer {
 			// Read the tail value (this may be overwritten as soon as tail is updated)
 			byte datum = array[tail];
 			tail = (tail + 1) % array.length;
+            if (tail >= head) {
+                System.out.println("Tail:" + tail + " head: " + head);
+            }
 			return datum;
 		}
+
+        @Override
+        public int available() {
+            return RingByteBuffer.this.available();
+        }
 	}
 }
