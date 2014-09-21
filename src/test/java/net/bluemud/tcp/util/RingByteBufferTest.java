@@ -140,5 +140,13 @@ public class RingByteBufferTest {
 
         reader.join(1000);
         assertThat(received.get(), is(data_size));
+        System.out.println("Bashed " + data_size + " bytes");
+    }
+
+    @Test
+    public void repeater() throws Exception {
+        for (int ii = 0; ii < 100; ii++) {
+            threaded();
+        }
     }
 }

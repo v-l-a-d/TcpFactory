@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -18,8 +19,9 @@ class RingByteBuffer {
 	// The backing byte array
 	private final byte[] array;
 	private final InputStream readStream;
+    private final BufferReader reader;
 
-	// This pointers will wrap after writing / reading 16k petabytes of data.
+	// These pointers will wrap after writing / reading 16k petabytes of data.
 	private volatile long virtual_head = 0L;
 	private volatile long virtual_data = 0L;
 	private volatile long virtual_tail = 0L;
@@ -28,18 +30,17 @@ class RingByteBuffer {
 	private final ReentrantLock readNotificationLock;
 	private final Condition dataAvailableForRead;
 
-	// Lock and condition used to signal space availability
-	private final ReentrantLock writeNotificationLock;
-	private final Condition spaceAvailableForWrite;
+    public RingByteBuffer(int capacity) {
+        this(capacity, null);
+    }
 
-	public RingByteBuffer(int capacity) {
+	public RingByteBuffer(int capacity, BufferReader reader) {
 		this.array = new byte[capacity];
 		this.readStream = new RingInputStream();
+        this.reader = reader;
 
 		readNotificationLock = new ReentrantLock();
 		dataAvailableForRead = readNotificationLock.newCondition();
-		writeNotificationLock = new ReentrantLock();
-		spaceAvailableForWrite = writeNotificationLock.newCondition();
 	}
 
 	/**
@@ -120,7 +121,10 @@ class RingByteBuffer {
 				readNotificationLock.lock();
 				try {
 					dataAvailableForRead.await(10, TimeUnit.MILLISECONDS); // TODO timeout
-				} catch (InterruptedException ix) {
+                    if (reader != null) {
+                        reader.readBufferAvailable();
+                    }
+                } catch (InterruptedException ix) {
 					throw new IOException("Read interrupted", ix);
 				} finally {
 					readNotificationLock.unlock();
@@ -130,7 +134,8 @@ class RingByteBuffer {
 			// Read the tail value (this may be overwritten as soon as tail pointer is updated)
 			byte datum = array[(int)(virtual_tail % array.length)];
 			virtual_tail++;
-			return datum;
+
+            return datum;
 		}
 
         @Override

@@ -77,6 +77,7 @@ public class OutputRingByteBufferTest  {
 		writeThread.interrupt();
 		writeThread.join(1000);
 		assertThat(written.get(), is(data_size));
+        System.out.println("Bashed " + data_size + "bytes");
 	}
 
 	@Test
