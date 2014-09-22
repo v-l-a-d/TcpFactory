@@ -53,8 +53,8 @@ public class StreamEndToEndTest {
 
     @After
     public void cleanup() throws Exception {
-        clientFactory.shutdown();
-        serverFactory.shutdown();
+		serverFactory.shutdown();
+		clientFactory.shutdown();
     }
 
     @Test

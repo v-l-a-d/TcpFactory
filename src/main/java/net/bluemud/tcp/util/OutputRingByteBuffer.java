@@ -105,14 +105,16 @@ class OutputRingByteBuffer {
 	private class RingOutputStream extends OutputStream {
 		@Override
 		public void write(int b) throws IOException {
-			while(remaining() == 0) {
+			if (remaining() == 0) {
 				// Try to flush the buffer
 				flush();
 
 				// Wait for space to become available
 				writeNotificationLock.lock();
 				try {
-					spaceAvailableForWrite.await(10, TimeUnit.MILLISECONDS);
+					while (remaining() == 0) {
+						spaceAvailableForWrite.await();
+					}
 				} catch (InterruptedException ix) {
 					throw new IOException("Read interrupted", ix);
 				} finally {

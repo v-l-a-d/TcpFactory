@@ -116,14 +116,17 @@ class RingByteBuffer {
 	private class RingInputStream extends InputStream {
 		@Override
 		public int read() throws IOException {
-			while (available() == 0) {
+			if (available() == 0) {
 				// nothing to read, wait for input
 				readNotificationLock.lock();
 				try {
-					dataAvailableForRead.await(10, TimeUnit.MILLISECONDS); // TODO timeout
-                    if (reader != null) {
-                        reader.readBufferAvailable();
-                    }
+					while (available() == 0) {
+						// Retest the condition whilst holding the lock.
+						if (reader != null) {
+							reader.readBufferAvailable();
+						}
+						dataAvailableForRead.await();
+					}
                 } catch (InterruptedException ix) {
 					throw new IOException("Read interrupted", ix);
 				} finally {
