@@ -12,7 +12,11 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * A circular byte buffer that allows portions of the buffer to be viewed / used as instances {@code ByteBuffer}
  *
- * Single reader and single writer only!
+ * <b>INTERNAL USE ONLY</b>
+ *
+ * WARNING: Single reader and single writer only!
+ * WARNING: ByteBuffer instances exposed by this class are not *real* byte buffers - any change to their limits /
+ *   positions etc. (e.g. by calling flip()) will break this class.
  */
 class RingByteBuffer {
 

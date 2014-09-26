@@ -17,7 +17,10 @@ public class StreamConnectionProcessor implements ConnectionProcessor, BufferWri
 
     private Connection connection;
 
+    private volatile boolean closed;
+
 	public StreamConnectionProcessor(int bufferSize) {
+        this.closed = false;
 		this.inputBuffer = new RingByteBuffer(bufferSize, this);
         this.outputRingByteBuffer = new OutputRingByteBuffer(bufferSize, this);
 	}
@@ -27,6 +30,7 @@ public class StreamConnectionProcessor implements ConnectionProcessor, BufferWri
     }
 
     public void close() {
+        closed = true;
         this.connection.close();
     }
 
@@ -41,8 +45,13 @@ public class StreamConnectionProcessor implements ConnectionProcessor, BufferWri
 	@Override
 	public void connectionClosed(Exception ex) {
         // Notify
+        closed = true;
         System.out.println("Connection closed: " + ex);
 	}
+
+    public boolean isClosed() {
+        return closed;
+    }
 
 	@Override
 	public ByteBuffer getReadBuffer() {
