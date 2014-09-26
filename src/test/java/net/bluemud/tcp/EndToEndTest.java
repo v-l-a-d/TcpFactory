@@ -163,6 +163,7 @@ public class EndToEndTest {
 		}
 
 		@Override public void readComplete(ByteBuffer buffer) {
+			buffer.flip();
 			recvQueue.add(buffer);
 		}
 

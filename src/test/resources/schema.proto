@@ -1,0 +1,28 @@
+package protobuf;
+option java_package = "net.bluemud.protobuf.v1";
+option java_outer_classname = "Proto";
+
+message Request {
+   enum Type {
+       GET = 0;
+       PUT = 1;
+       POST = 2;
+       DELETE = 3;
+   }
+
+   required int64 id = 1;
+   required Type method = 2;
+   required string url = 3;
+   optional bytes body = 4;
+}
+
+message Response {
+   required int64 id = 1;
+   required int32 status_code = 2;
+   optional bytes body = 3;
+}
+
+message Container {
+   required int64 id = 1;
+   required Message message = 2;
+}
