@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -82,7 +83,12 @@ public class RingByteBufferTest {
     public void threaded() throws Exception {
 
 		final int data_size = 2048 + (int)(Math.random() * (12*1024));
-        final RingByteBuffer ring = new RingByteBuffer(512);
+        final RingByteBuffer ring = new RingByteBuffer(512, new BufferReader() {
+            @Override
+            public void readBufferAvailable() {
+            }
+        });
+
         final AtomicInteger received = new AtomicInteger(0);
 
         final Thread reader = new Thread() {
@@ -145,8 +151,83 @@ public class RingByteBufferTest {
 
     @Test
     public void repeater() throws Exception {
-        for (int ii = 0; ii < 10; ii++) {
-            threaded();
+        for (int ii = 0; ii < 100; ii++) {
+            threaded2();
         }
     }
+
+    @Test
+    public void threaded2() throws Exception {
+
+        final int data_size = 2048 + (int)(Math.random() * (12*1024));
+        final LinkedBlockingQueue<Boolean> canWriteQ = new LinkedBlockingQueue<Boolean>();
+
+        final RingByteBuffer ring = new RingByteBuffer(512, new BufferReader() {
+            @Override
+            public void readBufferAvailable() {
+                canWriteQ.add(Boolean.TRUE);
+            }
+        });
+
+        final AtomicInteger received = new AtomicInteger(0);
+
+        final Thread reader = new Thread() {
+            @Override
+            public void run() {
+                InputStream inStr = ring.getInputStream();
+                int bytesRead = 0;
+                try {
+                    int val = inStr.read();
+                    while (val != 23) {
+                        bytesRead++;
+                        val = inStr.read();
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error " + e);
+                } finally {
+                    received.set(bytesRead);
+                }
+            }
+        };
+
+        reader.start();
+
+        // Loop writing bytes to the ring buffer ByteBuffers
+        int bytesWritten = 0;
+        while (bytesWritten < data_size) {
+            ByteBuffer buffer = ring.getEmptyBuffer();
+
+            if (buffer.remaining() > 0) {
+                int writeAmount = Math.max(1, Math.min((int)(Math.random() * 256), data_size - bytesWritten));
+                writeAmount = Math.min(writeAmount, buffer.remaining());
+                bytesWritten += writeAmount;
+
+                // Fill the buffer
+                buffer.put(new byte[writeAmount]);
+
+                // Pass it back.
+                ring.readComplete(buffer);
+            } else if (ring.remaining() == 0) {
+                // No capacity - pause
+                ring.readComplete(buffer);
+                canWriteQ.take();
+            }
+        }
+
+        assertThat(bytesWritten, is(data_size));
+
+        // Write the poison pill.
+        ByteBuffer buffer = ring.getEmptyBuffer();
+        while (!buffer.hasRemaining()) {
+            Thread.sleep(50);
+            buffer = ring.getEmptyBuffer();
+        }
+        buffer.put((byte)23);
+        ring.readComplete(buffer);
+
+        reader.join(1000);
+        assertThat(received.get(), is(data_size));
+        System.out.println("Bashed " + data_size + " bytes");
+    }
+
 }

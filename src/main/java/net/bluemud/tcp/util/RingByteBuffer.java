@@ -79,11 +79,12 @@ class RingByteBuffer {
 	 */
 	public void readComplete(ByteBuffer buffer) {
 		// Update data head - data has been read in to the array.
-		boolean wasEmpty = virtual_tail == virtual_data;
+		boolean wasEmpty = available() == 0;
 		int data_pos = (int)(virtual_data % array.length);
 		virtual_data += buffer.position() - data_pos;
 		virtual_head = virtual_data;
 
+        // TODO Might be empty now!
 		if (wasEmpty) {
 			// Notify data availability
 			readNotificationLock.lock();
@@ -129,7 +130,7 @@ class RingByteBuffer {
 						if (reader != null) {
 							reader.readBufferAvailable();
 						}
-						dataAvailableForRead.await();
+ 						dataAvailableForRead.await();
 					}
                 } catch (InterruptedException ix) {
 					throw new IOException("Read interrupted", ix);
@@ -148,11 +149,11 @@ class RingByteBuffer {
         @Override
         public int available() {
             int available = RingByteBuffer.this.available();
-            if (available > 0) {
-                if (reader != null) {
-                    reader.readBufferAvailable();
-                }
-            }
+//            if (available > 0) {
+//                if (reader != null) {
+//                    reader.readBufferAvailable();
+//                }
+//            }
             return available;
         }
 	}
