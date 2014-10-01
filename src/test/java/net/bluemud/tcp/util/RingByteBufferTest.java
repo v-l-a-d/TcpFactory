@@ -145,7 +145,7 @@ public class RingByteBufferTest {
 
     @Test
     public void repeater() throws Exception {
-        for (int ii = 0; ii < 100; ii++) {
+        for (int ii = 0; ii < 10; ii++) {
             threaded();
         }
     }

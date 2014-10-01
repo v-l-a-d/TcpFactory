@@ -1,6 +1,7 @@
 package net.bluemud.tcp;
 
 import com.google.common.base.Throwables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 import net.bluemud.tcp.api.Connection;
 import net.bluemud.tcp.api.ConnectionProcessor;
@@ -12,7 +13,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -31,73 +35,66 @@ public class ServerTest {
 
     private TcpFactory clientFactory;
     private TcpFactory serverFactory;
-    private Queue<StreamConnectionProcessor> connections;
+
+    final AtomicInteger received = new AtomicInteger(0);
+    final int data_size = 1024*1024;
+    final int clients = 11;
+    final byte[] data = new byte[data_size];
+
+
+    final List<Thread> threads = Lists.newCopyOnWriteArrayList();
 
     @Before
     public void setup() throws Exception {
-        connections = Queues.newConcurrentLinkedQueue();
+        for (int ii = 0; ii < data_size; ii++) {
+            data[ii] = (byte)(ii % 255);
+        }
+
         clientFactory = new TcpFactory();
         serverFactory = new TcpFactory(new InboundConnectionHandler() {
             @Override public ConnectionProcessor acceptConnection(Connection connection) {
                 System.out.println("new connection");
-                StreamConnectionProcessor serverProcessor = new StreamConnectionProcessor(1024);
+                final StreamConnectionProcessor serverProcessor = new StreamConnectionProcessor(32*1024);
                 serverProcessor.setConnection(connection);
-                connections.add(serverProcessor);
+
+                // Launch thread to read the connection
+                Thread t = new Thread() {
+                    @Override
+                    public void run() {
+                        byte[] read = new byte[data_size];
+                        long start = System.currentTimeMillis();
+                        InputStream serverIn = serverProcessor.getInputStream();
+
+                        int bytesRead = 0;
+                        while (bytesRead < (data_size)) {
+                            try {
+                                bytesRead += serverIn.read(read, bytesRead, Math.min(Math.max(256, serverIn.available()),read.length - bytesRead));
+                                System.out.println("Read: " + bytesRead + " of " + (data_size));
+                            } catch (Exception e) {
+                                throw Throwables.propagate(e);
+                            }
+                        }
+                        System.out.println("Read took " + (System.currentTimeMillis() - start) + "ms");
+                        assertThat(read, is(data));
+                        received.addAndGet(bytesRead);
+                    }
+                };
+                t.setDaemon(true);
+                t.start();
+                threads.add(t);
+
                 return serverProcessor;
             }
         });
 
         // Start listening.
-        serverFactory.listenOn(new InetSocketAddress("127.0.0.1", 11211));
+        serverFactory.listenOn(new InetSocketAddress(11211));
     }
+
+
 
     @org.junit.Test
     public void serverTest() throws Exception {
-        final AtomicInteger received = new AtomicInteger(0);
-        final int data_size = 1024*1024;
-        final int clients = 1;
-
-        final byte[] data = new byte[data_size];
-        for (int ii = 0; ii < data_size; ii++) {
-            data[ii] = (byte)(ii % 255);
-        }
-
-        final byte[] read = new byte[clients * data_size];
-
-        Thread t = new Thread() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                }
-
-                int bytesRead = 0;
-                while (bytesRead < (clients * data_size)) {
-                    try {
-                        StreamConnectionProcessor processor = connections.poll();
-                        if (processor == null) {
-                            break;
-                        }
-
-                        if (!processor.isClosed()) {
-                            InputStream serverIn = processor.getInputStream();
-
-                        //    if (serverIn.available() > 0) {
-                               bytesRead += serverIn.read(read, bytesRead, Math.min(serverIn.available(), read.length - bytesRead));
-                               System.out.println("Read: " + bytesRead + " of " + (clients * data_size));
-                        //    }
-                            connections.add(processor);
-                        }
-                    } catch (Exception e) {
-                        throw Throwables.propagate(e);
-                    }
-                }
-                received.set(bytesRead);
-            }
-        };
-        t.setDaemon(true);
-        t.start();
 
         for (int ii = 0; ii < clients; ii++) {
             Thread cl = new Thread() {
@@ -105,21 +102,24 @@ public class ServerTest {
                 public void run() {
                     try {
 
-                        StreamConnectionProcessor clProcessor = new StreamConnectionProcessor(1024);
+                        StreamConnectionProcessor clProcessor = new StreamConnectionProcessor(8*1024);
                         Connection clientConnection = clientFactory.connectTo(clProcessor, new InetSocketAddress("127.0.0.1", 11211));
                         clProcessor.setConnection(clientConnection);
                         OutputStream clOut = clProcessor.getOutputStream();
 
+                        Thread.sleep(100);
+                        long start = System.currentTimeMillis();
                         int written = 0;
                         while (written < data_size) {
-                            clOut.write(data, written, 1024);
+                            clOut.write(data, written, 8*1024);
                             clOut.flush();
-                            written += 1024;
+                            written += 8*1024;
                             System.out.println("Written " + written + " of " + data_size);
                         }
+                        System.out.println("writer done " + (System.currentTimeMillis() - start) + "ms");
 
+                        Thread.sleep(200);
                         clProcessor.close();
-                        System.out.println("writer done");
                     } catch (Exception ex) {
                         System.out.println("Client thread exiting with error " + ex);
                         ex.printStackTrace(System.out);
@@ -130,8 +130,10 @@ public class ServerTest {
             cl.start();
         }
 
-        t.join(30000);
+        Thread.sleep(200);
+        for (Thread t : threads) {
+            t.join(30000);
+        }
         assertThat(received.get(), is(clients * data_size));
-        //assertThat(read, is(data));
     }
 }

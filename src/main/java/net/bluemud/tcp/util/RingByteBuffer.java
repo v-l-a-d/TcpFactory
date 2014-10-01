@@ -138,7 +138,7 @@ class RingByteBuffer {
 				}
 			}
 
-			// Read the tail value (this may be overwritten as soon as tail pointer is updated)
+  			// Read the tail value (this may be overwritten as soon as tail pointer is updated)
 			byte datum = array[(int)(virtual_tail % array.length)];
 			virtual_tail++;
 
@@ -147,7 +147,13 @@ class RingByteBuffer {
 
         @Override
         public int available() {
-            return RingByteBuffer.this.available();
+            int available = RingByteBuffer.this.available();
+            if (available > 0) {
+                if (reader != null) {
+                    reader.readBufferAvailable();
+                }
+            }
+            return available;
         }
 	}
 }
