@@ -42,6 +42,9 @@ public class EndToEndTest {
 				inboundConnection = connection;
 				return inboundProcessor;
 			}
+
+			@Override public void connectionReadable(Connection connection) {
+			}
 		});
 
 		// Start listening.

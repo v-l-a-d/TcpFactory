@@ -37,8 +37,8 @@ public class ServerTest {
     private TcpFactory serverFactory;
 
     final AtomicInteger received = new AtomicInteger(0);
-    final int data_size = 1024*1024;
-    final int clients = 11;
+    final int data_size = 32*1024;
+    final int clients = 25;
     final byte[] data = new byte[data_size];
 
 
@@ -53,7 +53,6 @@ public class ServerTest {
         clientFactory = new TcpFactory();
         serverFactory = new TcpFactory(new InboundConnectionHandler() {
             @Override public ConnectionProcessor acceptConnection(Connection connection) {
-                System.out.println("new connection");
                 final StreamConnectionProcessor serverProcessor = new StreamConnectionProcessor(32*1024);
                 serverProcessor.setConnection(connection);
 
@@ -69,7 +68,6 @@ public class ServerTest {
                         while (bytesRead < (data_size)) {
                             try {
                                 bytesRead += serverIn.read(read, bytesRead, Math.min(Math.max(256, serverIn.available()),read.length - bytesRead));
-                                System.out.println("Read: " + bytesRead + " of " + (data_size));
                             } catch (Exception e) {
                                 throw Throwables.propagate(e);
                             }
@@ -79,13 +77,17 @@ public class ServerTest {
                         received.addAndGet(bytesRead);
                     }
                 };
+				threads.add(t);
                 t.setDaemon(true);
                 t.start();
-                threads.add(t);
+
 
                 return serverProcessor;
             }
-        });
+
+			@Override public void connectionReadable(Connection connection) {
+			}
+		});
 
         // Start listening.
         serverFactory.listenOn(new InetSocketAddress(11211));
@@ -114,7 +116,6 @@ public class ServerTest {
                             clOut.write(data, written, 8*1024);
                             clOut.flush();
                             written += 8*1024;
-                            System.out.println("Written " + written + " of " + data_size);
                         }
                         System.out.println("writer done " + (System.currentTimeMillis() - start) + "ms");
 

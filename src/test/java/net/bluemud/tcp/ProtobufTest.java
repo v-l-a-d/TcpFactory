@@ -38,6 +38,9 @@ public class ProtobufTest {
 				serverProcessor.setConnection(connection);
 				return serverProcessor;
 			}
+
+			@Override public void connectionReadable(Connection connection) {
+			}
 		});
 
 		// Start listening.

@@ -82,7 +82,7 @@ public class OutputRingByteBufferTest  {
 
 	@Test
 	public void repeater() throws Exception {
-		for (int ii = 0; ii < 100; ii++) {
+		for (int ii = 0; ii < 1000; ii++) {
 			threaded();
 		}
 	}

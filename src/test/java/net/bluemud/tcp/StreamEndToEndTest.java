@@ -37,7 +37,10 @@ public class StreamEndToEndTest {
                 serverProcessor.setConnection(connection);
                 return serverProcessor;
             }
-        });
+
+			@Override public void connectionReadable(Connection connection) {
+			}
+		});
 
         // Start listening.
         serverFactory.listenOn(new InetSocketAddress("127.0.0.1", 11211));

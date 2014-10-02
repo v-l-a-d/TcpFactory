@@ -65,18 +65,15 @@ class OutputRingByteBuffer {
 
 	void writeComplete(ByteBuffer buffer) {
 		// Update the tail - can free up data that has been written.
-		boolean wasFull = remaining() == 0;
 		int tail_pos = (int)(virtual_tail % array.length);
 		virtual_tail += buffer.position() - tail_pos;
 
-		if (wasFull) {
-			// Notify space available
-			writeNotificationLock.lock();
-			try {
-				spaceAvailableForWrite.signal();
-			} finally {
-				writeNotificationLock.unlock();
-			}
+		// Notify space available
+		writeNotificationLock.lock();
+		try {
+			spaceAvailableForWrite.signal();
+		} finally {
+			writeNotificationLock.unlock();
 		}
 	}
 
@@ -130,7 +127,7 @@ class OutputRingByteBuffer {
 		public void flush() throws IOException {
 			writer.write(getDataBuffer());
 			if (available() > 0) {
-				// When wrapping over the nd of the array, not all available data will be returned in the data buffer.
+				// When wrapping over the end of the array, not all available data will be returned in the data buffer.
 				// Call again to get the complete data.
 				ByteBuffer buffer = getDataBuffer();
 				if (buffer.remaining() > 0) {

@@ -5,4 +5,5 @@ package net.bluemud.tcp.api;
  */
 public interface InboundConnectionHandler {
 	ConnectionProcessor acceptConnection(Connection connection);
+	void connectionReadable(Connection connection);
 }

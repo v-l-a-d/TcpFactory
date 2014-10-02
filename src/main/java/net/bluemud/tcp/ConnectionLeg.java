@@ -59,6 +59,11 @@ class ConnectionLeg implements Connection {
 	}
 
 	@Override
+	public ConnectionProcessor getProcessor() {
+		return processor;
+	}
+
+	@Override
     public InetSocketAddress getLocalAddress() {
 		return (InetSocketAddress)this.channel.socket().getLocalSocketAddress();
 	}

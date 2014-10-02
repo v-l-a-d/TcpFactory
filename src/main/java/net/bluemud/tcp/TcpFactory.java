@@ -2,6 +2,7 @@ package net.bluemud.tcp;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import net.bluemud.tcp.api.Connection;
 import net.bluemud.tcp.api.ConnectionProcessor;
 import net.bluemud.tcp.api.InboundConnectionHandler;
@@ -12,6 +13,7 @@ import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -20,6 +22,9 @@ public class TcpFactory {
 	private static InboundConnectionHandler REJECT_ALL = new InboundConnectionHandler() {
 		@Override public ConnectionProcessor acceptConnection(Connection connection) {
 			return null;
+		}
+
+		@Override public void connectionReadable(Connection connection) {
 		}
 	};
 
@@ -32,7 +37,7 @@ public class TcpFactory {
 
 	public TcpFactory(InboundConnectionHandler inboundHandler) throws IOException {
 		this.inboundHandler = inboundHandler;
-		selectorThread = new SelectorThread(this);
+		this.selectorThread = new SelectorThread(this);
 	}
 
 	public void listenOn(SocketAddress socketAddress) throws IOException {
@@ -73,5 +78,12 @@ public class TcpFactory {
 
 		connection.setProcessor(processor);
 	    return connection;
+	}
+
+	/**
+	 * Called by selector when there is data to read on a connection leg.
+	 */
+	void connectionReadyToRead(ConnectionLeg connection) {
+		inboundHandler.connectionReadable(connection);
 	}
 }

@@ -29,6 +29,10 @@ public class StreamConnectionProcessor implements ConnectionProcessor, BufferWri
         this.connection = connection;
     }
 
+	public Connection getConnection() {
+		return connection;
+	}
+
     public void close() {
         closed = true;
         this.connection.close();

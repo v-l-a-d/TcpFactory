@@ -336,6 +336,8 @@ class SelectorThread extends Thread implements Closeable {
         // Get the connection object associated with the key.
         ConnectionLeg lconn = (ConnectionLeg)key.attachment();
 		lconn.read();
+
+		factory.connectionReadyToRead(lconn);
     }
 
     private void processWrite(SelectionKey key) throws InterruptedException {

@@ -79,20 +79,16 @@ class RingByteBuffer {
 	 */
 	public void readComplete(ByteBuffer buffer) {
 		// Update data head - data has been read in to the array.
-		boolean wasEmpty = available() == 0;
 		int data_pos = (int)(virtual_data % array.length);
 		virtual_data += buffer.position() - data_pos;
 		virtual_head = virtual_data;
 
-        // TODO Might be empty now!
-		if (wasEmpty) {
-			// Notify data availability
-			readNotificationLock.lock();
-			try {
-				dataAvailableForRead.signal();
-			} finally {
-				readNotificationLock.unlock();
-			}
+		// Notify data availability
+		readNotificationLock.lock();
+		try {
+			dataAvailableForRead.signal();
+		} finally {
+			readNotificationLock.unlock();
 		}
 	}
 

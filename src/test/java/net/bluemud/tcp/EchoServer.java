@@ -54,7 +54,10 @@ public class EchoServer {
 
                     return serverProcessor;
                 }
-            });
+
+				@Override public void connectionReadable(Connection connection) {
+				}
+			});
 
             // Start listening
             serverFactory.listenOn(new InetSocketAddress(9999));

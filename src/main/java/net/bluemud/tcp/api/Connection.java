@@ -9,6 +9,7 @@ public interface Connection {
 	void write(ByteBuffer buffer);
 	void readBufferAvailable();
 	void setProcessor(ConnectionProcessor processor);
+	ConnectionProcessor getProcessor();
 	void close();
 
 	InetSocketAddress getRemoteAddress();
