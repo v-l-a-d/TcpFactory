@@ -1,11 +1,11 @@
-package net.bluemud.tcp.util;
+package net.bluemud.tcp.internal;
 
+import net.bluemud.tcp.internal.BufferWriter;
+import net.bluemud.tcp.internal.OutputRingByteBuffer;
 import org.junit.Test;
 
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicInteger;

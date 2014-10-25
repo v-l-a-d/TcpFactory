@@ -2,21 +2,15 @@ package net.bluemud.tcp;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Queues;
 import net.bluemud.tcp.api.Connection;
-import net.bluemud.tcp.api.ConnectionProcessor;
 import net.bluemud.tcp.api.InboundConnectionHandler;
-import net.bluemud.tcp.util.StreamConnectionProcessor;
+import net.bluemud.tcp.internal.TcpFactory;
 import org.junit.Before;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -52,9 +46,7 @@ public class ServerTest {
 
         clientFactory = new TcpFactory();
         serverFactory = new TcpFactory(new InboundConnectionHandler() {
-            @Override public ConnectionProcessor acceptConnection(Connection connection) {
-                final StreamConnectionProcessor serverProcessor = new StreamConnectionProcessor(32*1024);
-                serverProcessor.setConnection(connection);
+            @Override public boolean acceptConnection(final Connection connection) {
 
                 // Launch thread to read the connection
                 Thread t = new Thread() {
@@ -62,7 +54,7 @@ public class ServerTest {
                     public void run() {
                         byte[] read = new byte[data_size];
                         long start = System.currentTimeMillis();
-                        InputStream serverIn = serverProcessor.getInputStream();
+                        InputStream serverIn = connection.getInputStream();
 
                         int bytesRead = 0;
                         while (bytesRead < (data_size)) {
@@ -82,7 +74,7 @@ public class ServerTest {
                 t.start();
 
 
-                return serverProcessor;
+                return true;
             }
 
 			@Override public void connectionReadable(Connection connection) {
@@ -104,10 +96,8 @@ public class ServerTest {
                 public void run() {
                     try {
 
-                        StreamConnectionProcessor clProcessor = new StreamConnectionProcessor(8*1024);
-                        Connection clientConnection = clientFactory.connectTo(clProcessor, new InetSocketAddress("127.0.0.1", 11211));
-                        clProcessor.setConnection(clientConnection);
-                        OutputStream clOut = clProcessor.getOutputStream();
+                        Connection clientConnection = clientFactory.connectTo(new InetSocketAddress("127.0.0.1", 11211));
+                        OutputStream clOut = clientConnection.getOutputStream();
 
                         Thread.sleep(100);
                         long start = System.currentTimeMillis();
@@ -120,7 +110,7 @@ public class ServerTest {
                         System.out.println("writer done " + (System.currentTimeMillis() - start) + "ms");
 
                         Thread.sleep(200);
-                        clProcessor.close();
+                        clientConnection.close();
                     } catch (Exception ex) {
                         System.out.println("Client thread exiting with error " + ex);
                         ex.printStackTrace(System.out);

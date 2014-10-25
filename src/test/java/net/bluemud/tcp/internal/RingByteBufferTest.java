@@ -1,5 +1,7 @@
-package net.bluemud.tcp.util;
+package net.bluemud.tcp.internal;
 
+import net.bluemud.tcp.internal.BufferReader;
+import net.bluemud.tcp.internal.RingByteBuffer;
 import org.junit.Test;
 
 import java.io.InputStream;

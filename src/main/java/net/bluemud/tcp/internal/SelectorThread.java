@@ -1,5 +1,7 @@
-package net.bluemud.tcp;
+package net.bluemud.tcp.internal;
 
+import net.bluemud.tcp.OutboundConnectionListener;
+import net.bluemud.tcp.api.InboundConnectionHandler;
 import net.bluemud.tcp.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +24,9 @@ class SelectorThread extends Thread implements Closeable {
     private final Selector selector;
 
 	/**
-	 * Connection factory
+	 * Inbound connection handler
 	 */
-	private final TcpFactory factory;
+	private final InboundConnectionHandler inboundHandler;
 
     /**
      * The run flag.
@@ -60,12 +62,12 @@ class SelectorThread extends Thread implements Closeable {
      *
      * @throws java.io.IOException if an error occurs opening the selector
      */
-    SelectorThread(TcpFactory factory) throws IOException {
+    SelectorThread(InboundConnectionHandler inboundHandler) throws IOException {
         super("TCP-Selector");
 
         // Open selector.
         this.selector = Selector.open();
-		this.factory = factory;
+		this.inboundHandler = inboundHandler;
         start();
     }
 
@@ -136,7 +138,8 @@ class SelectorThread extends Thread implements Closeable {
 
                 while (lsvr != null) {
                     // Register the channel with the selector.
-                    lsvr.register(selector, SelectionKey.OP_ACCEPT);
+                    SelectionKey key = lsvr.register(selector, SelectionKey.OP_ACCEPT);
+					key.interestOps(SelectionKey.OP_ACCEPT);
                     lsvr = svrRegistrations.poll();
                 }
 
@@ -267,12 +270,12 @@ class SelectorThread extends Thread implements Closeable {
             SelectionKey lkey = lchannel.register(selector, SelectionKey.OP_READ);
 
             // Set up a new connection leg instance object.
-            ConnectionLeg inbound = factory.createLegForInboundConnection(lchannel, lkey);
-			if (inbound != null) {
+			ConnectionLeg inbound = new ConnectionLeg(lchannel, lkey, this);
+            if (inboundHandler.acceptConnection(inbound)) {
 				lkey.attach(inbound);
 			} else {
 				// Rejected
-				lchannel.close();
+				inbound.close();
 			}
         }
         catch (IOException iox) {
@@ -337,7 +340,8 @@ class SelectorThread extends Thread implements Closeable {
         ConnectionLeg lconn = (ConnectionLeg)key.attachment();
 		lconn.read();
 
-		factory.connectionReadyToRead(lconn);
+		// Notify the connection handler.
+		inboundHandler.connectionReadable(lconn);
     }
 
     private void processWrite(SelectionKey key) throws InterruptedException {

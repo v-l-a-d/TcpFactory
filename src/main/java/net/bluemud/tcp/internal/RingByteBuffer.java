@@ -1,11 +1,8 @@
-package net.bluemud.tcp.util;
+package net.bluemud.tcp.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -142,15 +139,17 @@ class RingByteBuffer {
             return datum;
 		}
 
+//		public int read(byte[] buffer, int off, int len) throws IOException {
+//			int bytesToRead = Math.min(len, available());
+//			for (int ii = off; ii < (off + bytesToRead); ii++) {
+//				buffer[ii] = (byte)read();
+//			}
+//			return bytesToRead;
+//		}
+
         @Override
         public int available() {
-            int available = RingByteBuffer.this.available();
-//            if (available > 0) {
-//                if (reader != null) {
-//                    reader.readBufferAvailable();
-//                }
-//            }
-            return available;
+            return RingByteBuffer.this.available();
         }
 	}
 }

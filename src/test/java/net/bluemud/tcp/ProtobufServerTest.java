@@ -4,8 +4,8 @@ import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import net.bluemud.protobuf.v1.Proto;
 import net.bluemud.tcp.api.Connection;
+import net.bluemud.tcp.internal.TcpFactory;
 import net.bluemud.tcp.util.AbstractInboundHandler;
-import net.bluemud.tcp.util.StreamConnectionProcessor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,7 +24,6 @@ import static org.junit.Assert.assertThat;
 public class ProtobufServerTest {
 	private TcpFactory clientFactory;
 	private TcpFactory serverFactory;
-	private StreamConnectionProcessor clientProcessor;
 
 	private final int dataSize = 128*1024;
 	private final int numClients = 15;
@@ -41,11 +40,11 @@ public class ProtobufServerTest {
 
 		clientFactory = new TcpFactory();
 		serverFactory = new TcpFactory(new AbstractInboundHandler(Executors.newFixedThreadPool(5)) {
-			@Override public void process(StreamConnectionProcessor processor) {
+			@Override public void handle(Connection processor) {
 				try {
 					// Read request
 					Proto.Request request = Proto.Request.parseDelimitedFrom(processor.getInputStream());
-					assertThat(request.getId(), is(12345L));
+					long id = request.getId();
 					assertThat(request.getMethod(), is(Proto.Request.Type.POST));
 					assertThat(request.getUrl(), is("http:/bludemud.net?a=b"));
 					byte[] bytes = request.getBody().toByteArray();
@@ -53,7 +52,7 @@ public class ProtobufServerTest {
 
 					// Write response
 					Proto.Response.Builder rspBuilder = Proto.Response.newBuilder();
-					rspBuilder.setId(12345L);
+					rspBuilder.setId(id);
 					rspBuilder.setStatusCode(200);
 					rspBuilder.setBody(ByteString.copyFrom(bytes));
 					rspBuilder.build().writeDelimitedTo(processor.getOutputStream());
@@ -86,21 +85,21 @@ public class ProtobufServerTest {
 				public void run() {
 
 					try {
-						StreamConnectionProcessor clientProcessor = new StreamConnectionProcessor(32*1024);
-						Connection clientConnection = clientFactory.connectTo(clientProcessor, new InetSocketAddress("127.0.0.1", 11211));
-						clientProcessor.setConnection(clientConnection);
+						Connection clientConnection = clientFactory.connectTo(new InetSocketAddress("127.0.0.1", 11211));
 						Thread.sleep(100);
 
-						OutputStream out = clientProcessor.getOutputStream();
-						InputStream in = clientProcessor.getInputStream();
+						OutputStream out = clientConnection.getOutputStream();
+						InputStream in = clientConnection.getInputStream();
 
 						for (int jj = 0; jj < iterations; jj++) {
 							long start = System.nanoTime();
 
 							// Send request and read response.
 							// Build and send request
+							long id = 12345L + jj;
+
 							Proto.Request.Builder builder = Proto.Request.newBuilder();
-							builder.setId(12345L);
+							builder.setId(id);
 							builder.setUrl("http:/bludemud.net?a=b");
 							builder.setMethod(Proto.Request.Type.POST);
 							builder.setBody(ByteString.copyFrom(data));
@@ -108,8 +107,8 @@ public class ProtobufServerTest {
 							out.flush();
 
 							// Read the response.
-							Proto.Response response = Proto.Response.parseDelimitedFrom(clientProcessor.getInputStream());
-							assertThat(response.getId(), is(12345L));
+							Proto.Response response = Proto.Response.parseDelimitedFrom(clientConnection.getInputStream());
+							assertThat(response.getId(), is(id));
 							assertThat(response.getStatusCode(), is(200));
 							assertThat(response.getBody().toByteArray().length, is(data.length));
 							System.out.println("iteration " + jj + " complete in " + ((System.nanoTime() - start) / (1000L*1000)) + "ms");

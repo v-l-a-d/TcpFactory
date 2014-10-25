@@ -2,9 +2,8 @@ package net.bluemud.tcp;
 
 import com.google.common.base.Throwables;
 import net.bluemud.tcp.api.Connection;
-import net.bluemud.tcp.api.ConnectionProcessor;
 import net.bluemud.tcp.api.InboundConnectionHandler;
-import net.bluemud.tcp.util.StreamConnectionProcessor;
+import net.bluemud.tcp.internal.TcpFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,17 +24,16 @@ import static org.junit.Assert.assertThat;
 public class StreamEndToEndTest {
     private TcpFactory clientFactory;
     private TcpFactory serverFactory;
-    private StreamConnectionProcessor clientProcessor;
-    private StreamConnectionProcessor serverProcessor;
+    private Connection clientProcessor;
+    private Connection serverProcessor;
 
     @Before
     public void setup() throws Exception {
         clientFactory = new TcpFactory();
         serverFactory = new TcpFactory(new InboundConnectionHandler() {
-            @Override public ConnectionProcessor acceptConnection(Connection connection) {
-                serverProcessor = new StreamConnectionProcessor(1024);
-                serverProcessor.setConnection(connection);
-                return serverProcessor;
+            @Override public boolean acceptConnection(Connection connection) {
+				serverProcessor = connection;
+                return true;
             }
 
 			@Override public void connectionReadable(Connection connection) {
@@ -46,9 +44,7 @@ public class StreamEndToEndTest {
         serverFactory.listenOn(new InetSocketAddress("127.0.0.1", 11211));
 
         // Make a client connection to the listening address.
-        clientProcessor = new StreamConnectionProcessor(1024);
-        Connection clientConnection = clientFactory.connectTo(clientProcessor, new InetSocketAddress("127.0.0.1", 11211));
-        clientProcessor.setConnection(clientConnection);
+        clientProcessor = clientFactory.connectTo(new InetSocketAddress("127.0.0.1", 11211));
 
         Thread.sleep(100);
         assertThat(serverProcessor, not(nullValue()));

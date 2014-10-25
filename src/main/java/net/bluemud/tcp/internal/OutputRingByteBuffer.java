@@ -1,9 +1,8 @@
-package net.bluemud.tcp.util;
+package net.bluemud.tcp.internal;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 

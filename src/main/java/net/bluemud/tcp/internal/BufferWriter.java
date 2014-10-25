@@ -1,9 +1,9 @@
-package net.bluemud.tcp.util;
+package net.bluemud.tcp.internal;
 
 import java.nio.ByteBuffer;
 
 /**
  */
-public interface BufferWriter {
+interface BufferWriter {
 	public void write(ByteBuffer buffer);
 }

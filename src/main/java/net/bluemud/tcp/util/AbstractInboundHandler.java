@@ -2,7 +2,6 @@ package net.bluemud.tcp.util;
 
 import com.google.common.collect.Sets;
 import net.bluemud.tcp.api.Connection;
-import net.bluemud.tcp.api.ConnectionProcessor;
 import net.bluemud.tcp.api.InboundConnectionHandler;
 
 import java.io.IOException;
@@ -14,48 +13,45 @@ import java.util.concurrent.ExecutorService;
 public abstract class AbstractInboundHandler implements InboundConnectionHandler {
 
 	private final ExecutorService executor;
-	private final Set<ConnectionProcessor> activeProcessors;
+	private final Set<Connection> activeConnections;
 
 
 	public AbstractInboundHandler(ExecutorService executor) {
 		this.executor = executor;
-		this.activeProcessors = Sets.newConcurrentHashSet();
+		this.activeConnections = Sets.newConcurrentHashSet();
 	}
 
 	@Override
-	public ConnectionProcessor acceptConnection(Connection connection) {
-		StreamConnectionProcessor serverProcessor = new StreamConnectionProcessor(64 * 1024);
-		serverProcessor.setConnection(connection);
-		return serverProcessor;
+	public boolean acceptConnection(Connection connection) {
+		return true;
 	}
 
 	@Override
 	public void connectionReadable(final Connection connection) {
-		final StreamConnectionProcessor processor = (StreamConnectionProcessor) connection.getProcessor();
-		if (activeProcessors.add(processor)) {
+		if (activeConnections.add(connection)) {
 			// Not an active connection - add to the read executor
 			executor.execute(new Runnable() {
 				@Override public void run() {
 					try {
-						process(processor);
+						handle(connection);
 					} finally {
-						returnConnection(processor);
+						returnConnection(connection);
 					}
 				}
 			});
 		}
 	}
 
-	private void returnConnection(StreamConnectionProcessor processor) {
-		activeProcessors.remove(processor);
+	private void returnConnection(Connection connection) {
+		activeConnections.remove(connection);
 		try {
-			if (processor.getInputStream().available() != 0) {
-				connectionReadable(processor.getConnection());
+			if (connection.getInputStream().available() != 0) {
+				connectionReadable(connection);
 			}
 		} catch (IOException e) {
 			// Unexpected
 		}
 	}
 
-	public abstract void process(StreamConnectionProcessor processor);
+	public abstract void handle(Connection connection);
 }
