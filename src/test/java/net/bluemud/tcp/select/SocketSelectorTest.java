@@ -77,7 +77,7 @@ public class SocketSelectorTest {
 
     private final static class Outbound implements OutboundConnection {
 
-        private SocketChannel channel;
+        private volatile SocketChannel channel;
 
         @Override
         public InetSocketAddress getRemoteAddress() {

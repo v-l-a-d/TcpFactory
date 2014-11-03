@@ -22,6 +22,10 @@ public class TcpFactory {
 
 		@Override public void connectionReadable(Connection connection) {
 		}
+
+		@Override
+		public void connectionClosed(Connection connection) {
+		}
 	};
 
 	private final SelectorThread selectorThread;

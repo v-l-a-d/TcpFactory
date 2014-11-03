@@ -127,6 +127,7 @@ class SelectorThread extends Thread implements Closeable {
                         if (!lkey.isValid()) {
                             ConnectionLeg leg  = (ConnectionLeg)lkey.attachment();
                             if (leg != null) {
+								inboundHandler.connectionClosed(leg);
                                 leg.close(null);
                             }
                         }
@@ -340,8 +341,10 @@ class SelectorThread extends Thread implements Closeable {
         ConnectionLeg lconn = (ConnectionLeg)key.attachment();
 		lconn.read();
 
-		// Notify the connection handler.
-		inboundHandler.connectionReadable(lconn);
+		if (!lconn.isClosed()) {
+			// Notify the connection handler.
+			inboundHandler.connectionReadable(lconn);
+		}
     }
 
     private void processWrite(SelectionKey key) throws InterruptedException {

@@ -74,6 +74,7 @@ public class OutputRingByteBufferTest  {
 		assertThat(bytesWritten, is(data_size));
 
 		// Stop the writer
+		Thread.sleep(50);
 		writeThread.interrupt();
 		writeThread.join(1000);
 		assertThat(written.get(), is(data_size));
@@ -82,7 +83,7 @@ public class OutputRingByteBufferTest  {
 
 	@Test
 	public void repeater() throws Exception {
-		for (int ii = 0; ii < 1000; ii++) {
+		for (int ii = 0; ii < 100; ii++) {
 			threaded();
 		}
 	}

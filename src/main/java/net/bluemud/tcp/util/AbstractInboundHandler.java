@@ -1,5 +1,6 @@
 package net.bluemud.tcp.util;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import net.bluemud.tcp.api.Connection;
 import net.bluemud.tcp.api.InboundConnectionHandler;
@@ -18,12 +19,16 @@ public abstract class AbstractInboundHandler implements InboundConnectionHandler
 
 	public AbstractInboundHandler(ExecutorService executor) {
 		this.executor = executor;
-		this.activeConnections = Sets.newConcurrentHashSet();
+		this.activeConnections = Sets.newSetFromMap(Maps.<Connection, Boolean>newConcurrentMap());
 	}
 
 	@Override
 	public boolean acceptConnection(Connection connection) {
 		return true;
+	}
+
+	@Override
+	public void connectionClosed(Connection connection) {
 	}
 
 	@Override
@@ -40,6 +45,10 @@ public abstract class AbstractInboundHandler implements InboundConnectionHandler
 				}
 			});
 		}
+	}
+
+	protected boolean isActive(final Connection connection) {
+		return this.activeConnections.contains(connection);
 	}
 
 	private void returnConnection(Connection connection) {

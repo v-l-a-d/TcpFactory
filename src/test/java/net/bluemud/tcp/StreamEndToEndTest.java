@@ -38,13 +38,17 @@ public class StreamEndToEndTest {
 
 			@Override public void connectionReadable(Connection connection) {
 			}
+
+			@Override
+			public void connectionClosed(Connection connection) {
+			}
 		});
 
         // Start listening.
-        serverFactory.listenOn(new InetSocketAddress("127.0.0.1", 11211));
+        serverFactory.listenOn(new InetSocketAddress("127.0.0.1", 11212));
 
         // Make a client connection to the listening address.
-        clientProcessor = clientFactory.connectTo(new InetSocketAddress("127.0.0.1", 11211));
+        clientProcessor = clientFactory.connectTo(new InetSocketAddress("127.0.0.1", 11212));
 
         Thread.sleep(100);
         assertThat(serverProcessor, not(nullValue()));

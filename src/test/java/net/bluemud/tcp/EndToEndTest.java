@@ -40,6 +40,10 @@ public class EndToEndTest {
 
 			@Override public void connectionReadable(Connection connection) {
 			}
+
+			@Override
+			public void connectionClosed(Connection connection) {
+			}
 		});
 
 		// Start listening.
@@ -64,6 +68,7 @@ public class EndToEndTest {
 		// Write some data on the client connection
 		byte[] testData = "Some sort of test data string".getBytes();
 		clientConnection.getOutputStream().write(testData);
+		clientConnection.getOutputStream().flush();
 
 		// Expect data to be received at the server.
 		byte[] b = new byte[testData.length];
@@ -73,6 +78,7 @@ public class EndToEndTest {
 		// Send something back again
 		byte[] rsp = "Some kind of response text".getBytes();
 		inboundConnection.getOutputStream().write(rsp);
+		inboundConnection.getOutputStream().flush();
 
 		byte[] recvData = new byte[rsp.length];
 		clientConnection.getInputStream().read(recvData);

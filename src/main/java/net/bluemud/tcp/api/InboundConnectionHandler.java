@@ -6,4 +6,5 @@ package net.bluemud.tcp.api;
 public interface InboundConnectionHandler {
 	boolean acceptConnection(Connection connection);
 	void connectionReadable(Connection connection);
+	void connectionClosed(Connection connection);
 }

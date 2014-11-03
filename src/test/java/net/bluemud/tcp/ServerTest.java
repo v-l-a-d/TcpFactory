@@ -79,6 +79,9 @@ public class ServerTest {
 
 			@Override public void connectionReadable(Connection connection) {
 			}
+
+			@Override public void connectionClosed(Connection connection) {
+			}
 		});
 
         // Start listening.
